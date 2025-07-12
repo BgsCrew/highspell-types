@@ -543,8 +543,10 @@ async function main() {
   async function downloadWithRetry(url, maxRetries = 3) {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`Downloading client code from ${url}... (attempt ${attempt + 1}/${maxRetries + 1})`);
-        
+        console.log(
+          `Downloading client code from ${url}... (attempt ${attempt + 1}/${maxRetries + 1})`
+        );
+
         const compressedCode = await new Promise((resolve, reject) => {
           const request = https.get(url, { timeout: 30000 }, (res) => {
             if (res.statusCode < 200 || res.statusCode >= 300) {
@@ -559,29 +561,31 @@ async function main() {
             res.on('data', (chunk) => chunks.push(chunk));
             res.on('end', () => resolve(Buffer.concat(chunks)));
           });
-          
+
           request.on('error', (err) => reject(err));
           request.on('timeout', () => {
             request.destroy();
             reject(new Error('Request timeout'));
           });
         });
-        
+
         return compressedCode;
       } catch (error) {
         console.warn(`Download attempt ${attempt + 1} failed:`, error.message);
-        
+
         if (attempt === maxRetries) {
-          throw new Error(`Failed to download after ${maxRetries + 1} attempts: ${error.message}`);
+          throw new Error(
+            `Failed to download after ${maxRetries + 1} attempts: ${error.message}`
+          );
         }
-        
+
         // Calculate delay with exponential backoff and jitter
         const baseDelay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
         const jitter = Math.random() * 1000; // 0-1s random jitter
         const delay = baseDelay + jitter;
-        
+
         console.log(`Retrying in ${Math.round(delay)}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
   }

@@ -28,6 +28,10 @@
     "./mappings": {
       "import": "./dist/mappings.js",
       "require": "./dist/mappings.js"
+    },
+    "./dist/mappings": {
+      "import": "./dist/mappings.js",
+      "require": "./dist/mappings.js"
     }
   },
   "dependencies": {

@@ -44,6 +44,21 @@ module.exports = function ({ types: t }) {
           path.replaceWith(instanceProperty);
         }
       },
+
+      // Transform import statements to use game references
+      ImportDeclaration(path) {
+        const source = path.node.source.value;
+
+        // Transform imports from highspell-types to game references
+        if (
+          source === '@bgscrew/highspell-types' ||
+          source.includes('highspell-types')
+        ) {
+          // Remove the import and let the global game object be used instead
+          // In a real game environment, the game object would be globally available
+          path.remove();
+        }
+      },
     },
   };
 };

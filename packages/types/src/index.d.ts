@@ -11,22 +11,16 @@ export * from './mappings';
 export * from './packet-bases';
 
 // Re-export auto-generated Core namespace with manager exports
-export { Core, default } from './core-exports';
+export { Core } from './core-exports';
 
-export namespace Core {
-  // --- Entities ---
-  export type Entity = Definitions.Entity;
-  export type Player = Definitions.Player;
-  export type CombatStats = Definitions.CombatStats;
-  export type SkillStats = Definitions.SkillStats;
-  export type Appearance = Definitions.Appearance;
-
-  // --- Packets ---
-  export * from './packets';
-
-  // --- Enums ---
-  export * from '../dist/enums';
-
-  // --- Definitions ---
-  export * from '../dist/definitions';
+// Merge additional types into the Core namespace
+declare module './core-exports' {
+  namespace Core {
+    // --- Entities ---
+    export type Entity = Definitions.Entity;
+    export type Player = Definitions.Player;
+    export type CombatStats = Definitions.CombatStats;
+    export type SkillStats = Definitions.SkillStats;
+    export type Appearance = Definitions.Appearance;
+  }
 }

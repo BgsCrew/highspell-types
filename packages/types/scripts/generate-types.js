@@ -534,31 +534,66 @@ async function main() {
     process.exit(1);
   }
 
+  /**
+   * Downloads client code with retry logic, exponential backoff, and jitter.
+   * @param {string} url - The URL to download from.
+   * @param {number} maxRetries - Maximum number of retry attempts.
+   * @returns {Promise<Buffer>} The downloaded content as a Buffer.
+   */
+  async function downloadWithRetry(url, maxRetries = 3) {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Downloading client code from ${url}... (attempt ${attempt + 1}/${maxRetries + 1})`);
+        
+        const compressedCode = await new Promise((resolve, reject) => {
+          const request = https.get(url, { timeout: 30000 }, (res) => {
+            if (res.statusCode < 200 || res.statusCode >= 300) {
+              return reject(
+                new Error(
+                  `Failed to download file: Status Code ${res.statusCode}`
+                )
+              );
+            }
+            /** @type {Buffer[]} */
+            const chunks = [];
+            res.on('data', (chunk) => chunks.push(chunk));
+            res.on('end', () => resolve(Buffer.concat(chunks)));
+          });
+          
+          request.on('error', (err) => reject(err));
+          request.on('timeout', () => {
+            request.destroy();
+            reject(new Error('Request timeout'));
+          });
+        });
+        
+        return compressedCode;
+      } catch (error) {
+        console.warn(`Download attempt ${attempt + 1} failed:`, error.message);
+        
+        if (attempt === maxRetries) {
+          throw new Error(`Failed to download after ${maxRetries + 1} attempts: ${error.message}`);
+        }
+        
+        // Calculate delay with exponential backoff and jitter
+        const baseDelay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s
+        const jitter = Math.random() * 1000; // 0-1s random jitter
+        const delay = baseDelay + jitter;
+        
+        console.log(`Retrying in ${Math.round(delay)}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
   let clientCode;
   try {
     // Try to read the local copy first
     clientCode = await fs.readFile(LOCAL_CLIENT_PATH, 'utf-8');
     console.log('Using cached local client code.');
   } catch (error) {
-    // If it doesn't exist, download it
-    console.log(`Downloading client code from ${CLIENT_URL}...`);
-    const compressedCode = await new Promise((resolve, reject) => {
-      https
-        .get(CLIENT_URL, (res) => {
-          if (res.statusCode < 200 || res.statusCode >= 300) {
-            return reject(
-              new Error(
-                `Failed to download file: Status Code ${res.statusCode}`
-              )
-            );
-          }
-          /** @type {Buffer[]} */
-          const chunks = [];
-          res.on('data', (chunk) => chunks.push(chunk));
-          res.on('end', () => resolve(Buffer.concat(chunks)));
-        })
-        .on('error', (err) => reject(err));
-    });
+    // If it doesn't exist, download it with retry logic
+    const compressedCode = await downloadWithRetry(CLIENT_URL, 3);
 
     // Decompress the code
     clientCode = zlib.gunzipSync(compressedCode).toString('utf-8');

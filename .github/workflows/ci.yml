@@ -64,6 +64,8 @@ jobs:
         run: pnpm --filter @bgscrew/highspell-types build
         env:
           CLIENT_URL: ${{ secrets.CLIENT_URL }}
+      - name: Build Plugin
+        run: pnpm --filter @bgscrew/highspell-build-plugin build || echo "No build script defined for build-plugin"
       - name: Set artifact name
         id: artifact
         run: echo "name=highspell-types-build-${{ github.sha }}" >> $GITHUB_OUTPUT
@@ -77,6 +79,8 @@ jobs:
             packages/types/src/core-exports.d.ts
             packages/types/src/index.d.ts
             packages/types/package.json
+            packages/build-plugin/src/
+            packages/build-plugin/package.json
           retention-days: 1
 
   test:

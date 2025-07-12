@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": true
+  },
+  "include": ["src/**/*.ts", "scripts/**/*.js", "__tests__/**/*.js"],
+  "exclude": ["node_modules", "dist"]
+}

@@ -6,4 +6,6 @@ dist/
 
 AUTOMATION.md
 
-client.51.js
+client.js
+generated.d.ts
+/packages/types/client.js

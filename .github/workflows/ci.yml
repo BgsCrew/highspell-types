@@ -1,0 +1,136 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 0 * * *' # Runs every day at midnight
+  workflow_dispatch: # Allows manual runs
+
+env:
+  NODE_VERSION: '22'
+  PNPM_VERSION: 8
+
+jobs:
+  lint:
+    name: Lint and Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Node.js and pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          version: ${{ env.PNPM_VERSION }}
+      - name: Install Dependencies
+        run: pnpm install
+      - name: Lint
+        run: pnpm -r lint
+
+  type-check:
+    name: Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Node.js and pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          version: ${{ env.PNPM_VERSION }}
+      - name: Install Dependencies
+        run: pnpm install
+      - name: Type Check
+        run: pnpm -r type-check
+
+  test:
+    name: Run Tests
+    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Node.js and pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          version: ${{ env.PNPM_VERSION }}
+      - name: Install Dependencies
+        run: pnpm install
+      - name: Run Tests
+        run: pnpm -r test
+
+  build_and_publish:
+    name: Nightly Build and Publish
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js and pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          version: ${{ env.PNPM_VERSION }}
+          registry-url: 'https://npm.pkg.github.com'
+
+      - name: Install Dependencies
+        run: pnpm install
+
+      - name: Build Types
+        run: pnpm --filter @bgscrew/highspell-types build
+        env:
+          # This secret must be set in the repository settings
+          CLIENT_URL: ${{ secrets.CLIENT_URL }}
+
+      - name: Check for generated file changes
+        id: git-check
+        run: echo "changes=$(git status --porcelain)" >> $GITHUB_OUTPUT
+
+      - name: Configure Git
+        if: steps.git-check.outputs.changes
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Commit generated files
+        if: steps.git-check.outputs.changes
+        run: |
+          git add .
+          git commit -m "chore(types): nightly build of generated types"
+
+      - name: Bump version and get new tag
+        if: steps.git-check.outputs.changes
+        id: version
+        run: |
+          cd packages/types && pnpm version minor && cd ../..
+          echo "tag=$(git describe --tags --abbrev=0)" >> $GITHUB_OUTPUT
+
+      - name: Push changes and tags
+        if: steps.git-check.outputs.changes
+        run: git push && git push --tags
+
+      - name: Create GitHub Release
+        if: steps.git-check.outputs.changes
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          release_name: Release ${{ steps.version.outputs.tag }}
+          body: 'Automated nightly release with updated types.'
+          draft: false
+          prerelease: false
+
+      - name: Publish to GitHub Packages
+        if: steps.git-check.outputs.changes
+        run: pnpm --filter @bgscrew/highspell-types publish --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

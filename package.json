@@ -1,17 +1,16 @@
 {
-  "name": "highspell-re",
-  "version": "1.0.0",
-  "description": "TypeScript definitions for the HighSpell game client.",
-  "main": "dist/index.js",
-  "module": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "name": "highspell-sdk-monorepo",
+  "private": true,
   "scripts": {
-    "build": "node automation/generate-types.js"
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "build": "pnpm -r build",
+    "check": "pnpm -r check",
+    "prepare": "husky"
   },
-  "files": [
-    "dist"
-  ],
-  "dependencies": {
-    "prettier": "^3.6.2"
+  "devDependencies": {
+    "husky": "^9.1.4",
+    "prettier": "^3.3.3",
+    "typescript": "^5.5.4"
   }
 }

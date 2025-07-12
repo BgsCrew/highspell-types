@@ -46,10 +46,10 @@ jobs:
       - name: Type Check
         run: pnpm -r type-check
 
-  test:
-    name: Run Tests
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+  build:
+    name: Build
     runs-on: ubuntu-latest
+    needs: [lint, type-check]
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -60,13 +60,48 @@ jobs:
           version: ${{ env.PNPM_VERSION }}
       - name: Install Dependencies
         run: pnpm install
+      - name: Build Types
+        run: pnpm --filter @bgscrew/highspell-types build
+        env:
+          # This secret must be set in the repository settings
+          CLIENT_URL: ${{ secrets.CLIENT_URL }}
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: |
+            packages/types/src/generated-packets.d.ts
+            packages/types/package.json
+          retention-days: 1
+
+  test:
+    name: Run Tests
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+      - name: Setup Node.js and pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          version: ${{ env.PNPM_VERSION }}
+      - name: Install Dependencies
+        run: pnpm install
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: .
       - name: Run Tests
         run: pnpm -r test
 
-  build_and_publish:
-    name: Build and Publish
+  publish:
+    name: Publish
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    needs: [build, test]
     permissions:
       contents: write
       packages: write
@@ -88,11 +123,11 @@ jobs:
       - name: Install Dependencies
         run: pnpm install
 
-      - name: Build Types
-        run: pnpm --filter @bgscrew/highspell-types build
-        env:
-          # This secret must be set in the repository settings
-          CLIENT_URL: ${{ secrets.CLIENT_URL }}
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: .
 
       - name: Check for generated file changes
         id: git-check

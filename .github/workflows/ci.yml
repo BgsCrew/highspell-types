@@ -64,15 +64,19 @@ jobs:
         run: pnpm -r test
 
   build_and_publish:
-    name: Nightly Build and Publish
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    name: Build and Publish
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
       packages: write
+      id-token: write
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js and pnpm
         uses: pnpm/action-setup@v4
@@ -95,42 +99,84 @@ jobs:
         run: echo "changes=$(git status --porcelain)" >> $GITHUB_OUTPUT
 
       - name: Configure Git
-        if: steps.git-check.outputs.changes
         run: |
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
-      - name: Commit generated files
-        if: steps.git-check.outputs.changes
-        run: |
-          git add .
-          git commit -m "chore(types): nightly build of generated types"
-
-      - name: Bump version and get new tag
-        if: steps.git-check.outputs.changes
+      - name: Determine version bump
         id: version
         run: |
-          cd packages/types && pnpm version minor && cd ../..
-          echo "tag=$(git describe --tags --abbrev=0)" >> $GITHUB_OUTPUT
+          if [[ "${{ github.event_name }}" == "schedule" ]]; then
+            echo "type=prerelease" >> $GITHUB_OUTPUT
+            echo "tag=nightly" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "type=patch" >> $GITHUB_OUTPUT
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          else
+            # Push to main - determine version based on commit messages
+            if git log --format=%B -n 1 | grep -q "\[major\]"; then
+              echo "type=major" >> $GITHUB_OUTPUT
+            elif git log --format=%B -n 1 | grep -q "\[minor\]"; then
+              echo "type=minor" >> $GITHUB_OUTPUT
+            else
+              echo "type=patch" >> $GITHUB_OUTPUT
+            fi
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Push changes and tags
-        if: steps.git-check.outputs.changes
-        run: git push && git push --tags
+      - name: Version packages
+        run: |
+          if [[ "${{ steps.version.outputs.type }}" == "prerelease" ]]; then
+            # For nightly builds, use a prerelease version with timestamp
+            TIMESTAMP=$(date +"%Y%m%d%H%M%S")
+            cd packages/types && pnpm version prerelease --preid=nightly-$TIMESTAMP --no-git-tag-version && cd ../..
+          else
+            # For regular releases
+            cd packages/types && pnpm version ${{ steps.version.outputs.type }} --no-git-tag-version && cd ../..
+          fi
 
-      - name: Create GitHub Release
-        if: steps.git-check.outputs.changes
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          release_name: Release ${{ steps.version.outputs.tag }}
-          body: 'Automated nightly release with updated types.'
-          draft: false
-          prerelease: false
+      - name: Commit generated files
+        if: steps.git-check.outputs.changes || steps.version.outputs.tag == 'latest'
+        run: |
+          git add .
+          NEW_VERSION=$(node -p "require('./packages/types/package.json').version")
+          git commit -m "chore: release v$NEW_VERSION [skip ci]" || true
+
+      - name: Create release tag
+        if: steps.version.outputs.tag == 'latest'
+        run: |
+          NEW_VERSION=$(node -p "require('./packages/types/package.json').version")
+          git tag "v$NEW_VERSION"
+          git push origin main --tags
 
       - name: Publish to GitHub Packages
-        if: steps.git-check.outputs.changes
-        run: pnpm --filter @bgscrew/highspell-types publish --no-git-checks
+        run: |
+          if [[ "${{ steps.version.outputs.tag }}" == "nightly" ]]; then
+            cd packages/types && pnpm publish --tag nightly --no-git-checks && cd ../..
+          else
+            cd packages/types && pnpm publish --tag latest --no-git-checks && cd ../..
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub release
+        if: steps.version.outputs.tag == 'latest'
+        run: |
+          NEW_VERSION=$(node -p "require('./packages/types/package.json').version")
+          gh release create "v$NEW_VERSION" \
+            --title "Release v$NEW_VERSION" \
+            --notes "Automated release v$NEW_VERSION" \
+            --latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create nightly release
+        if: steps.version.outputs.tag == 'nightly'
+        run: |
+          NEW_VERSION=$(node -p "require('./packages/types/package.json').version")
+          gh release create "v$NEW_VERSION" \
+            --title "Nightly Release v$NEW_VERSION" \
+            --notes "Automated nightly build v$NEW_VERSION" \
+            --prerelease
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

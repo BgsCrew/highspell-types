@@ -110,10 +110,20 @@ function extractEnums(ast) {
           path.node.init.properties.forEach((prop) => {
             if (
               prop.type === 'ObjectProperty' &&
-              prop.key.type === 'Identifier' &&
-              prop.value.type === 'NumericLiteral'
+              prop.key.type === 'Identifier'
             ) {
-              values[prop.key.name] = prop.value.value;
+              // Handle numeric literals
+              if (prop.value.type === 'NumericLiteral') {
+                values[prop.key.name] = prop.value.value;
+              }
+              // Handle string literals
+              else if (prop.value.type === 'StringLiteral') {
+                values[prop.key.name] = prop.value.value;
+              }
+              // Handle computed strings (e.g., 'attack')
+              else if (prop.value.type === 'Identifier') {
+                values[prop.key.name] = prop.value.name;
+              }
             }
           });
           enums[enumName] = values;
@@ -122,7 +132,298 @@ function extractEnums(ast) {
     },
   });
 
+  // Try to find additional enum patterns by looking for objects with sequential numeric values
+  traverse(ast, {
+    ObjectExpression(path) {
+      const props = path.node.properties;
+      if (props.length >= 3) {
+        // Must have at least 3 properties to be considered an enum
+        const values = {};
+        let isValidEnum = true;
+        let hasSequentialNumbers = true;
+        let expectedValue = 0;
+
+        for (const prop of props) {
+          if (
+            prop.type === 'ObjectProperty' &&
+            prop.key.type === 'Identifier'
+          ) {
+            if (prop.value.type === 'NumericLiteral') {
+              values[prop.key.name] = prop.value.value;
+              if (prop.value.value !== expectedValue) {
+                hasSequentialNumbers = false;
+              }
+              expectedValue++;
+            } else if (prop.value.type === 'StringLiteral') {
+              values[prop.key.name] = prop.value.value;
+              hasSequentialNumbers = false;
+            } else {
+              isValidEnum = false;
+              break;
+            }
+          } else {
+            isValidEnum = false;
+            break;
+          }
+        }
+
+        // If this looks like an enum but isn't mapped, try to guess its purpose
+        if (
+          isValidEnum &&
+          (hasSequentialNumbers || Object.keys(values).length >= 5)
+        ) {
+          // Check if this might be EntityType (common pattern: environment, item, npc, player)
+          if (!enums.EntityType && Object.keys(values).length >= 3) {
+            const keys = Object.keys(values).map((k) => k.toLowerCase());
+            if (
+              keys.includes('environment') ||
+              keys.includes('item') ||
+              keys.includes('npc') ||
+              keys.includes('player')
+            ) {
+              enums.EntityType = values;
+              console.log('Auto-detected EntityType enum:', values);
+            }
+          }
+
+          // Check if this might be TargetAction (action words)
+          if (!enums.TargetAction && Object.keys(values).length >= 5) {
+            const keys = Object.keys(values).map((k) => k.toLowerCase());
+            if (
+              keys.some(
+                (k) =>
+                  k.includes('attack') ||
+                  k.includes('talk') ||
+                  k.includes('pick') ||
+                  k.includes('use')
+              )
+            ) {
+              enums.TargetAction = values;
+              console.log('Auto-detected TargetAction enum:', values);
+            }
+          }
+
+          // Check if this might be MenuType (menu-related terms)
+          if (!enums.MenuType && Object.keys(values).length >= 3) {
+            const keys = Object.keys(values).map((k) => k.toLowerCase());
+            if (
+              keys.some(
+                (k) =>
+                  k.includes('bank') ||
+                  k.includes('shop') ||
+                  k.includes('inventory') ||
+                  k.includes('trade')
+              )
+            ) {
+              enums.MenuType = values;
+              console.log('Auto-detected MenuType enum:', values);
+            }
+          }
+        }
+      }
+    },
+  });
+
   return enums;
+}
+
+/**
+ * Generates TypeScript type guard functions for runtime type checking.
+ * @param {object} enums - The enum definitions.
+ * @param {object} packets - The packet definitions.
+ * @returns {string} The type guard functions as TypeScript code.
+ */
+function generateTypeGuards(enums, packets) {
+  let guardContent = `/**
+ * Auto-generated type guard functions for runtime type checking.
+ * Do not edit manually - regenerate with npm run generate-types.
+ */
+
+export namespace TypeGuards {
+`;
+
+  // Generate enum type guards
+  guardContent += `  // --- Enum Type Guards ---\n`;
+  for (const enumName in enums) {
+    const enumValues = enums[enumName];
+    const values = Object.values(enumValues);
+
+    guardContent += `  export function is${enumName}(value: any): value is Enums.${enumName} {\n`;
+    guardContent += `    return typeof value === 'string' && [${values.map((v) => `'${v}'`).join(', ')}].includes(value);\n`;
+    guardContent += `  }\n\n`;
+  }
+
+  // Generate packet type guards based on common interfaces
+  guardContent += `  // --- Packet Type Guards ---\n`;
+
+  // Generate guards for base packet types
+  guardContent += `  export function isEntityPacket(value: any): value is PacketBases.EntityPacket {\n`;
+  guardContent += `    return typeof value === 'object' && value !== null && typeof value.entityId === 'number';\n`;
+  guardContent += `  }\n\n`;
+
+  guardContent += `  export function isPositionPacket(value: any): value is PacketBases.PositionPacket {\n`;
+  guardContent += `    return typeof value === 'object' && value !== null && \n`;
+  guardContent += `           typeof value.x === 'number' && typeof value.y === 'number' && typeof value.z === 'number';\n`;
+  guardContent += `  }\n\n`;
+
+  guardContent += `  export function isItemPacket(value: any): value is PacketBases.ItemPacket {\n`;
+  guardContent += `    return typeof value === 'object' && value !== null && typeof value.itemId === 'number';\n`;
+  guardContent += `  }\n\n`;
+
+  guardContent += `  export function isInventoryPacket(value: any): value is PacketBases.InventoryPacket {\n`;
+  guardContent += `    return typeof value === 'object' && value !== null && \n`;
+  guardContent += `           typeof value.slot === 'number' && typeof value.itemId === 'number';\n`;
+  guardContent += `  }\n\n`;
+
+  // Generate guards for generated packet interfaces
+  if (packets && Object.keys(packets).length > 0) {
+    guardContent += `  // --- Generated Packet Type Guards ---\n`;
+    for (const [packetName, fields] of Object.entries(packets)) {
+      guardContent += `  export function is${packetName}(value: any): value is GeneratedPackets.${packetName} {\n`;
+      guardContent += `    return typeof value === 'object' && value !== null`;
+
+      for (const field of fields) {
+        if (field.type === 'number') {
+          guardContent += ` && \n           typeof value.${field.name} === 'number'`;
+        } else if (field.type === 'string') {
+          guardContent += ` && \n           typeof value.${field.name} === 'string'`;
+        } else if (field.type === 'boolean') {
+          guardContent += ` && \n           typeof value.${field.name} === 'boolean'`;
+        } else if (field.type.startsWith('Enums.')) {
+          const enumName = field.type.replace('Enums.', '');
+          guardContent += ` && \n           is${enumName}(value.${field.name})`;
+        } else {
+          guardContent += ` && \n           value.${field.name} !== undefined`;
+        }
+      }
+
+      guardContent += `;\n  }\n\n`;
+    }
+  }
+
+  // Generate generic object validation helper
+  guardContent += `  // --- Generic Validation Helpers ---\n`;
+  guardContent += `  export function hasProperty<T>(obj: any, prop: string): obj is T & Record<string, any> {\n`;
+  guardContent += `    return typeof obj === 'object' && obj !== null && prop in obj;\n`;
+  guardContent += `  }\n\n`;
+
+  guardContent += `  export function isObject(value: any): value is Record<string, any> {\n`;
+  guardContent += `    return typeof value === 'object' && value !== null && !Array.isArray(value);\n`;
+  guardContent += `  }\n\n`;
+
+  guardContent += `  export function isArrayOf<T>(value: any, guard: (item: any) => item is T): value is T[] {\n`;
+  guardContent += `    return Array.isArray(value) && value.every(guard);\n`;
+  guardContent += `  }\n`;
+
+  guardContent += `}\n`;
+
+  return guardContent;
+}
+
+/**
+ * Generates packet interfaces from method naming patterns in PacketFactory.
+ * @param {object} singletons - The collected singleton data.
+ * @returns {object} A map of packet names to their field definitions.
+ */
+function generatePacketInterfacesFromPatterns(singletons) {
+  const packets = {};
+
+  // Find PacketFactory
+  const packetFactory = Object.values(singletons).find(
+    (singleton) => singleton.descriptiveName === 'PacketFactory'
+  );
+
+  if (!packetFactory) {
+    return packets;
+  }
+
+  // Analyze methods to detect patterns
+  packetFactory.methods.forEach((method) => {
+    const methodName = method.name;
+
+    // Skip methods that already have packet mappings
+    if (packetMappings[methodName]) {
+      return;
+    }
+
+    // Extract packet patterns based on method names
+    if (methodName.startsWith('create') && methodName.endsWith('Action')) {
+      const actionName = methodName.replace('create', '').replace('Action', '');
+
+      // Generate packet interface based on parameter count and naming patterns
+      const fields = [];
+      const paramCount = method.params.length;
+
+      // Common patterns based on action names
+      if (
+        actionName.includes('Entity') ||
+        actionName.includes('Player') ||
+        actionName.includes('NPC')
+      ) {
+        fields.push({ name: 'entityId', type: 'number' });
+      }
+
+      if (
+        actionName.includes('Move') ||
+        actionName.includes('Position') ||
+        actionName.includes('Teleport')
+      ) {
+        fields.push(
+          { name: 'x', type: 'number' },
+          { name: 'y', type: 'number' },
+          { name: 'z', type: 'number' }
+        );
+      }
+
+      if (actionName.includes('Item')) {
+        fields.push({ name: 'itemId', type: 'number' });
+      }
+
+      if (actionName.includes('Exp') || actionName.includes('Experience')) {
+        fields.push(
+          { name: 'skillType', type: 'Enums.Skill' },
+          { name: 'expAmount', type: 'number' }
+        );
+      }
+
+      if (actionName.includes('Message') || actionName.includes('Chat')) {
+        fields.push(
+          { name: 'message', type: 'string' },
+          { name: 'senderId', type: 'number' }
+        );
+      }
+
+      if (actionName.includes('Damage')) {
+        fields.push(
+          { name: 'entityId', type: 'number' },
+          { name: 'damageAmount', type: 'number' },
+          { name: 'damageType', type: 'Enums.DamageType' }
+        );
+      }
+
+      if (actionName.includes('Skill')) {
+        fields.push({ name: 'skillType', type: 'Enums.Skill' });
+      }
+
+      if (actionName.includes('Menu')) {
+        fields.push({ name: 'menuType', type: 'Enums.MenuType' });
+      }
+
+      // Add generic parameters based on parameter count if we don't have specific fields
+      if (fields.length === 0 && paramCount > 0) {
+        for (let i = 0; i < Math.min(paramCount, 5); i++) {
+          fields.push({ name: `param${i + 1}`, type: 'any' });
+        }
+      }
+
+      // Only generate if we have some meaningful fields
+      if (fields.length > 0) {
+        packets[actionName] = fields;
+      }
+    }
+  });
+
+  return packets;
 }
 
 /**
@@ -497,6 +798,115 @@ async function main() {
     const mappingsDtsPath = path.resolve(distDir, 'mappings.d.ts');
     await fs.writeFile(mappingsDtsPath, mappingsDtsContent);
     console.log(`Successfully generated mappings.d.ts at ${mappingsDtsPath}`);
+
+    // --- Generate Core Manager Exports ---
+    console.log('Generating Core manager exports...');
+    const coreExports = Object.values(nameMappings)
+      .map(
+        (friendlyName) =>
+          `  export const ${friendlyName} = Generated.Managers.${friendlyName}.Instance;`
+      )
+      .join('\n');
+
+    const coreExportsContent = `/// <reference path="generated.d.ts" />
+
+/**
+ * Auto-generated Core namespace exports.
+ * Do not edit manually - regenerate with npm run generate-types.
+ */
+
+import * as Generated from './generated';
+
+export namespace Core {
+  // --- Auto-generated Manager Exports ---
+${coreExports}
+}
+
+export default Core;
+`;
+
+    const coreExportsPath = path.resolve(__dirname, '../src/core-exports.d.ts');
+    await fs.writeFile(coreExportsPath, coreExportsContent);
+    console.log(
+      `Successfully generated core-exports.d.ts at ${coreExportsPath}`
+    );
+
+    // --- Generate Packet Base Interfaces ---
+    console.log('Generating packet base interfaces...');
+    const packetBaseContent = `/**
+ * Auto-generated packet base interfaces for common patterns.
+ * Do not edit manually - regenerate with npm run generate-types.
+ */
+
+export namespace PacketBases {
+  export interface EntityPacket {
+    entityId: number;
+  }
+
+  export interface PositionPacket {
+    x: number;
+    y: number;
+    z: number;
+  }
+
+  export interface ItemPacket {
+    itemId: number;
+  }
+
+  export interface InventoryPacket {
+    slot: number;
+    itemId: number;
+    amount?: number;
+  }
+
+  export interface ChunkPacket extends EntityPacket, PositionPacket {}
+}
+`;
+
+    const packetBasePath = path.resolve(__dirname, '../src/packet-bases.d.ts');
+    await fs.writeFile(packetBasePath, packetBaseContent);
+    console.log(
+      `Successfully generated packet-bases.d.ts at ${packetBasePath}`
+    );
+
+    // --- Generate Additional Packet Interfaces from Patterns ---
+    console.log('Generating packet interfaces from method patterns...');
+    const additionalPackets =
+      generatePacketInterfacesFromPatterns(mappedSingletons);
+    if (Object.keys(additionalPackets).length > 0) {
+      const additionalPacketsContent = `/**
+ * Auto-generated packet interfaces from method naming patterns.
+ * Do not edit manually - regenerate with npm run generate-types.
+ */
+
+export namespace GeneratedPackets {
+${Object.entries(additionalPackets)
+  .map(([name, fields]) => {
+    const fieldDefs = fields
+      .map((field) => `  ${field.name}: ${field.type};`)
+      .join('\n');
+    return `  export interface ${name} {\n${fieldDefs}\n  }`;
+  })
+  .join('\n\n')}
+}
+`;
+
+      const additionalPacketsPath = path.resolve(
+        __dirname,
+        '../src/generated-packets.d.ts'
+      );
+      await fs.writeFile(additionalPacketsPath, additionalPacketsContent);
+      console.log(
+        `Successfully generated generated-packets.d.ts at ${additionalPacketsPath}`
+      );
+    }
+
+    // --- Generate Type Guard Functions ---
+    console.log('Generating type guard functions...');
+    const typeGuardContent = generateTypeGuards(allEnums, additionalPackets);
+    const typeGuardPath = path.resolve(__dirname, '../src/type-guards.d.ts');
+    await fs.writeFile(typeGuardPath, typeGuardContent);
+    console.log(`Successfully generated type-guards.d.ts at ${typeGuardPath}`);
 
     const generatedDtsPath = path.resolve(distDir, 'generated.d.ts');
     await fs.writeFile(generatedDtsPath, formattedDtsContent);

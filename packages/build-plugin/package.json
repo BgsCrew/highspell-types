@@ -4,7 +4,7 @@
   "description": "A Babel plugin to transpile HighSpell plugin code.",
   "main": "src/index.js",
   "scripts": {
-    "test": "echo \"No tests implemented yet\" && exit 0",
+    "test": "jest",
     "format": "prettier --write .",
     "check": "pnpm format --check"
   },
@@ -12,6 +12,7 @@
     "@bgscrew/highspell-types": "workspace:*"
   },
   "devDependencies": {
-    "@babel/core": "^7.28.0"
+    "@babel/core": "^7.28.0",
+    "jest": "^29.0.0"
   }
 }

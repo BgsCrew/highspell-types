@@ -27,6 +27,9 @@ importers:
       '@babel/core':
         specifier: ^7.28.0
         version: 7.28.0
+      jest:
+        specifier: ^29.0.0
+        version: 29.7.0(@types/node@24.0.13)
 
   packages/types:
     dependencies:

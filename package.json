@@ -1,0 +1,17 @@
+{
+  "name": "highspell-re",
+  "version": "1.0.0",
+  "description": "TypeScript definitions for the HighSpell game client.",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "node automation/generate-types.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "prettier": "^3.6.2"
+  }
+}

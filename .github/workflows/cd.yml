@@ -1,0 +1,141 @@
+name: CD
+
+on:
+  workflow_call:
+    inputs:
+      build-artifact:
+        description: "Name of the build artifact"
+        required: true
+        type: string
+      version-type:
+        description: "Version bump type"
+        required: false
+        type: string
+        default: "auto"
+
+env:
+  NODE_VERSION: '22'
+  PNPM_VERSION: 8
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js and pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          version: ${{ env.PNPM_VERSION }}
+          registry-url: 'https://npm.pkg.github.com'
+
+      - name: Install Dependencies
+        run: pnpm install
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.build-artifact }}
+          path: .
+
+      - name: Check for generated file changes
+        id: git-check
+        run: |
+          CHANGES=$(git status --porcelain | wc -l)
+          echo "has_changes=$CHANGES" >> $GITHUB_OUTPUT
+
+      - name: Configure Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Determine version bump
+        id: version
+        run: |
+          if [[ "${{ inputs.version-type }}" != "auto" ]]; then
+            echo "type=${{ inputs.version-type }}" >> $GITHUB_OUTPUT
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "schedule" ]]; then
+            echo "type=prerelease" >> $GITHUB_OUTPUT
+            echo "tag=nightly" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "type=patch" >> $GITHUB_OUTPUT
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          else
+            # Push to main - determine version based on commit messages
+            if git log --format=%B -n 1 | grep -q "\[major\]"; then
+              echo "type=major" >> $GITHUB_OUTPUT
+            elif git log --format=%B -n 1 | grep -q "\[minor\]"; then
+              echo "type=minor" >> $GITHUB_OUTPUT
+            else
+              echo "type=patch" >> $GITHUB_OUTPUT
+            fi
+            echo "tag=latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Version packages
+        run: |
+          if [[ "${{ steps.version.outputs.type }}" == "prerelease" ]]; then
+            # For nightly builds, use a prerelease version with timestamp
+            TIMESTAMP=$(date +"%Y%m%d%H%M%S")
+            cd packages/types && pnpm version prerelease --preid=nightly-$TIMESTAMP --no-git-tag-version && cd ../..
+          else
+            # For regular releases
+            cd packages/types && pnpm version ${{ steps.version.outputs.type }} --no-git-tag-version && cd ../..
+          fi
+
+      - name: Commit generated files
+        if: steps.git-check.outputs.has_changes > 0 || steps.version.outputs.tag == 'latest'
+        run: |
+          git add .
+          NEW_VERSION=$(node -p "require('./packages/types/package.json').version")
+          git commit -m "chore: release v$NEW_VERSION [skip ci]" || true
+
+      - name: Create release tag
+        if: steps.version.outputs.tag == 'latest'
+        run: |
+          NEW_VERSION=$(node -p "require('./packages/types/package.json').version")
+          git tag "v$NEW_VERSION"
+          git push origin main --tags
+
+      - name: Publish to GitHub Packages
+        run: |
+          if [[ "${{ steps.version.outputs.tag }}" == "nightly" ]]; then
+            cd packages/types && pnpm publish --tag nightly --no-git-checks && cd ../..
+          else
+            cd packages/types && pnpm publish --tag latest --no-git-checks && cd ../..
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub release
+        if: steps.version.outputs.tag == 'latest'
+        run: |
+          NEW_VERSION=$(node -p "require('./packages/types/package.json').version")
+          gh release create "v$NEW_VERSION" \
+            --title "Release v$NEW_VERSION" \
+            --notes "Automated release v$NEW_VERSION" \
+            --latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create nightly release
+        if: steps.version.outputs.tag == 'nightly'
+        run: |
+          NEW_VERSION=$(node -p "require('./packages/types/package.json').version")
+          gh release create "v$NEW_VERSION" \
+            --title "Nightly Release v$NEW_VERSION" \
+            --notes "Automated nightly build v$NEW_VERSION" \
+            --prerelease
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

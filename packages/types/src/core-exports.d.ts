@@ -5,7 +5,7 @@
  * Do not edit manually - regenerate with npm run generate-types.
  */
 
-import * as Generated from "./generated";
+import * as Generated from './generated';
 
 export namespace Core {
   // --- Auto-generated Manager Exports ---

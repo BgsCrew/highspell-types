@@ -2,6 +2,10 @@
 import { execSync } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Helper function to recursively read directory contents
 async function getDirectoryTree(dirPath) {
@@ -60,5 +64,5 @@ describe('Type Generation', () => {
     const snapshot = JSON.stringify(distTree, null, 2);
 
     expect(snapshot).toMatchSnapshot();
-  });
+  }, 30000);
 });

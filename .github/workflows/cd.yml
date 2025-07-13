@@ -60,7 +60,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ${{ inputs.build-artifact }}
-          path: .
+          path: packages
 
       - name: Check for generated file changes
         id: git-check

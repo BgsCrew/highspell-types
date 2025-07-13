@@ -117,6 +117,6 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ${{ needs.build.outputs.artifact-name }}
-          path: .
+          path: packages
       - name: Run Tests
         run: pnpm test:all

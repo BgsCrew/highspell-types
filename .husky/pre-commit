@@ -5,7 +5,11 @@ staged_files=$(git diff --cached --name-only)
 # Run linting and formatting
 pnpm -r lint --fix && pnpm -r format
 
-# Only re-add the files that were originally staged
+# Only re-add the files that were originally staged and still exist
 if [ -n "$staged_files" ]; then
-  echo "$staged_files" | xargs git add
+  echo "$staged_files" | while read -r file; do
+    if [ -f "$file" ]; then
+      git add "$file"
+    fi
+  done
 fi

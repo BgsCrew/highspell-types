@@ -1,0 +1,12 @@
+{
+  "name": "swc-example",
+  "private": true,
+  "scripts": {
+    "build": "swc input.js -o output.js",
+    "build:watch": "swc input.js -o output.js --watch"
+  },
+  "devDependencies": {
+    "@swc/cli": "^0.1.62",
+    "@swc/core": "^1.3.95"
+  }
+}

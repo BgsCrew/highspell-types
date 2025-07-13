@@ -99,6 +99,24 @@ The plugin supports all managers defined in the HighSpell types package:
 - Node.js 14+
 - Babel 7+
 
+## Example
+
+See the `example/` directory for a complete working example:
+
+- `example/input.js` - Source code using friendly names
+- `example/.babelrc.js` - Babel configuration
+- `example/package.json` - Build scripts
+
+To run the example:
+
+```bash
+cd example
+pnpm install
+pnpm run build
+```
+
+This will transform `input.js` to `output.js` with minified names.
+
 ## Contributing
 
 This package is part of the HighSpell SDK monorepo. See the main README for contribution guidelines.

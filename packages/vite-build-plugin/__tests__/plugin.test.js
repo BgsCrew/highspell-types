@@ -1,4 +1,6 @@
 const viteHighSpellPlugin = require('../src/index');
+const fs = require('fs');
+const path = require('path');
 
 describe('HighSpell Vite Build Plugin', () => {
   test('creates a valid Vite plugin', () => {
@@ -91,5 +93,69 @@ const gameLoop = Core.GameLoop;`;
 
     expect(result).toBeTruthy();
     expect(result.code).toContain('Game.pW.start()');
+  });
+
+  describe('Example Integration', () => {
+    test('Example input transforms correctly', () => {
+      const plugin = viteHighSpellPlugin();
+      const examplePath = path.join(__dirname, '../example/input.js');
+      const exampleInput = fs.readFileSync(examplePath, 'utf8');
+
+      const result = plugin.transform(exampleInput, 'example/input.js');
+
+      expect(result).toBeTruthy();
+
+      // Verify transformations are applied
+      expect(result.code).toContain('Game.pW.Instance');
+      expect(result.code).toContain('Game.fW.Instance');
+      expect(result.code).toContain('Game.Lk.Instance');
+      expect(result.code).toContain('Game.FG');
+      expect(result.code).toContain('Game.yV');
+
+      // Verify imports are removed
+      expect(result.code).not.toContain(
+        "import { Core, Generated } from '@bgscrew/highspell-types';"
+      );
+    });
+
+    test('Example produces expected manager mappings', () => {
+      const plugin = viteHighSpellPlugin();
+      const examplePath = path.join(__dirname, '../example/input.js');
+      const exampleInput = fs.readFileSync(examplePath, 'utf8');
+
+      const result = plugin.transform(exampleInput, 'example/input.js');
+
+      const expectedMappings = [
+        { friendly: 'Core.GameLoop', minified: 'Game.pW.Instance' },
+        { friendly: 'Core.InputManager', minified: 'Game.fW.Instance' },
+        { friendly: 'Core.EntityManager', minified: 'Game.Lk.Instance' },
+        {
+          friendly: 'Generated.Managers.NetworkManager.Instance',
+          minified: 'Game.FG',
+        },
+        {
+          friendly: 'Generated.Managers.PacketFactory.Instance',
+          minified: 'Game.yV',
+        },
+      ];
+
+      expectedMappings.forEach(({ friendly, minified }) => {
+        // Should not contain friendly names
+        expect(result.code).not.toContain(friendly);
+        // Should contain minified names
+        expect(result.code).toContain(minified);
+      });
+    });
+
+    test('Example configuration is valid', () => {
+      const configPath = path.join(__dirname, '../example/vite.config.js');
+      const configContent = fs.readFileSync(configPath, 'utf8');
+
+      // Verify the config imports the plugin
+      expect(configContent).toContain(
+        "import highspellPlugin from '../src/index.js';"
+      );
+      expect(configContent).toContain('plugins: [highspellPlugin()]');
+    });
   });
 });

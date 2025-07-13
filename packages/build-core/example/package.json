@@ -1,0 +1,7 @@
+{
+  "name": "build-core-example",
+  "private": true,
+  "scripts": {
+    "run": "node usage.js"
+  }
+}

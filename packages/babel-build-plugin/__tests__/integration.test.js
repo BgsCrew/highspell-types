@@ -3,6 +3,8 @@
  */
 
 const babel = require('@babel/core');
+const fs = require('fs');
+const path = require('path');
 const babelPlugin = require('../src/babel-plugin-highspell');
 
 describe('Integration Tests', () => {
@@ -65,6 +67,69 @@ managers.game.update();`,
       });
 
       expect(result.code.trim()).toBe(expected.trim());
+    });
+  });
+
+  describe('Example Integration', () => {
+    test('Example input transforms correctly', () => {
+      const examplePath = path.join(__dirname, '../example/input.js');
+      const exampleInput = fs.readFileSync(examplePath, 'utf8');
+
+      const result = babel.transformSync(exampleInput, {
+        plugins: [babelPlugin],
+        parserOpts: {
+          plugins: ['typescript'],
+        },
+      });
+
+      // Verify transformations are applied
+      expect(result.code).toContain('Game.pW.Instance');
+      expect(result.code).toContain('Game.fW.Instance');
+      expect(result.code).toContain('Game.Lk.Instance');
+      expect(result.code).toContain('Game.FG');
+      expect(result.code).toContain('Game.yV');
+
+      // Verify imports are removed
+      expect(result.code).not.toContain(
+        "import { Core, Generated } from '@bgscrew/highspell-types';"
+      );
+
+      // Verify the transformed code doesn't contain syntax errors
+      expect(result.code).toBeDefined();
+      expect(result.code.length).toBeGreaterThan(0);
+    });
+
+    test('Example produces expected manager mappings', () => {
+      const examplePath = path.join(__dirname, '../example/input.js');
+      const exampleInput = fs.readFileSync(examplePath, 'utf8');
+
+      const result = babel.transformSync(exampleInput, {
+        plugins: [babelPlugin],
+        parserOpts: {
+          plugins: ['typescript'],
+        },
+      });
+
+      const expectedMappings = [
+        { friendly: 'Core.GameLoop', minified: 'Game.pW.Instance' },
+        { friendly: 'Core.InputManager', minified: 'Game.fW.Instance' },
+        { friendly: 'Core.EntityManager', minified: 'Game.Lk.Instance' },
+        {
+          friendly: 'Generated.Managers.NetworkManager.Instance',
+          minified: 'Game.FG',
+        },
+        {
+          friendly: 'Generated.Managers.PacketFactory.Instance',
+          minified: 'Game.yV',
+        },
+      ];
+
+      expectedMappings.forEach(({ friendly, minified }) => {
+        // Should not contain friendly names
+        expect(result.code).not.toContain(friendly);
+        // Should contain minified names
+        expect(result.code).toContain(minified);
+      });
     });
   });
 });

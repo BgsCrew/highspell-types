@@ -6,6 +6,8 @@ const {
   transformHighSpellNode,
   getTransformationInfo,
 } = require('../src/index');
+const fs = require('fs');
+const path = require('path');
 
 describe('HighSpell Build Core', () => {
   const createIdentifier = (name) => ({ type: 'Identifier', name });
@@ -214,6 +216,32 @@ describe('HighSpell Build Core', () => {
       expect(info.friendlyToMinified.GameLoop).toBe('pW');
       expect(info.availableManagers).toContain('GameLoop');
       expect(info.patterns.CORE_MEMBER).toBe('Core.ManagerName');
+    });
+  });
+
+  describe('Example Integration', () => {
+    test('Example usage file exists and runs without errors', () => {
+      const examplePath = path.join(__dirname, '../example/usage.js');
+      expect(fs.existsSync(examplePath)).toBe(true);
+
+      // The example should be able to require the core module
+      expect(() => {
+        require('../example/usage.js');
+      }).not.toThrow();
+    });
+
+    test('Example demonstrates all core functions', () => {
+      const examplePath = path.join(__dirname, '../example/usage.js');
+      const exampleContent = fs.readFileSync(examplePath, 'utf8');
+
+      // Verify example uses all main functions
+      expect(exampleContent).toContain('isCoreManagerAccess');
+      expect(exampleContent).toContain('isGeneratedManagerAccess');
+      expect(exampleContent).toContain('shouldRemoveImport');
+      expect(exampleContent).toContain('transformHighSpellNode');
+      expect(exampleContent).toContain('getTransformationInfo');
+      expect(exampleContent).toContain('createGameManagerAccess');
+      expect(exampleContent).toContain('TRANSFORM_PATTERNS');
     });
   });
 });

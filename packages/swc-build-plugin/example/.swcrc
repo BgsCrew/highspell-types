@@ -1,0 +1,10 @@
+{
+  "plugins": [["../src/index.js", {}]],
+  "jsc": {
+    "parser": {
+      "syntax": "ecmascript",
+      "jsx": false
+    },
+    "target": "es2020"
+  }
+}

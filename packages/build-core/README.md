@@ -59,6 +59,22 @@ The core library handles these transformations:
 - `Generated.Managers.GameLoop.Instance` → `Game.pW.Instance`
 - Removes imports of `@bgscrew/highspell-types`
 
+## Example
+
+See the `example/` directory for a complete working example:
+
+- `example/usage.js` - Demonstrates core transformation functions
+- `example/package.json` - Run script
+
+To run the example:
+
+```bash
+cd example
+node usage.js
+```
+
+This will demonstrate the core transformation functions and their output.
+
 ## Contributing
 
 This package is part of the HighSpell SDK monorepo. See the main README for contribution guidelines.

@@ -5,6 +5,9 @@
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",
     "build": "pnpm -r build",
+    "build:types": "pnpm --filter @bgscrew/highspell-types build",
+    "build:all": "pnpm build:types && pnpm -r build",
+    "test:all": "pnpm build:types && pnpm -r test",
     "check": "pnpm -r check",
     "prepare": "husky"
   },

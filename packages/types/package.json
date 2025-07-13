@@ -21,6 +21,7 @@
   "exports": {
     ".": {
       "import": "./dist/index.js",
+      "require": "./dist/mappings.cjs",
       "types": "./dist/index.d.ts"
     },
     "./GameAction": {
@@ -28,11 +29,11 @@
     },
     "./mappings": {
       "import": "./dist/mappings.js",
-      "require": "./dist/mappings.js"
+      "require": "./dist/mappings.cjs"
     },
     "./dist/mappings": {
       "import": "./dist/mappings.js",
-      "require": "./dist/mappings.js"
+      "require": "./dist/mappings.cjs"
     }
   },
   "dependencies": {

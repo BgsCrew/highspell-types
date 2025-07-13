@@ -73,8 +73,8 @@ jobs:
         run: pnpm --filter @bgscrew/highspell-types build:ci
         env:
           CLIENT_URL: ${{ secrets.CLIENT_URL }}
-      - name: Build Plugin
-        run: pnpm --filter @bgscrew/highspell-build-plugin build || echo "No build script defined for build-plugin"
+      - name: Build All Packages
+        run: pnpm -r build
       - name: Set artifact name
         id: artifact
         run: echo "name=highspell-types-build-${{ github.sha }}" >> $GITHUB_OUTPUT
@@ -83,13 +83,17 @@ jobs:
         with:
           name: ${{ steps.artifact.outputs.name }}
           path: |
-            packages/types/src/generated-packets.d.ts
-            packages/types/src/generated.d.ts
-            packages/types/src/core-exports.d.ts
-            packages/types/src/index.d.ts
+            packages/types/dist/
+            packages/types/src/
             packages/types/package.json
-            packages/build-plugin/src/
-            packages/build-plugin/package.json
+            packages/build-core/src/
+            packages/build-core/package.json
+            packages/babel-build-plugin/src/
+            packages/babel-build-plugin/package.json
+            packages/swc-build-plugin/src/
+            packages/swc-build-plugin/package.json
+            packages/vite-build-plugin/src/
+            packages/vite-build-plugin/package.json
           retention-days: 1
 
   test:
@@ -115,4 +119,4 @@ jobs:
           name: ${{ needs.build.outputs.artifact-name }}
           path: .
       - name: Run Tests
-        run: pnpm -r test
+        run: pnpm test:all

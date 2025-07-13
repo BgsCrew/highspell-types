@@ -525,12 +525,15 @@ function generateEnumDeclarations(enums) {
 async function main() {
   console.log('Starting TypeScript definition generation...');
 
+  const useLocalClient = process.argv.includes('--local-client');
   const CLIENT_URL = 'https://highspell.com/js/client/client.51.js';
   const __dirname = path.dirname(new URL(import.meta.url).pathname);
   const LOCAL_CLIENT_PATH = path.resolve(__dirname, '../client.js');
 
-  if (!CLIENT_URL) {
-    console.error('Error: CLIENT_URL is not set in scripts/generate-types.js');
+  if (!CLIENT_URL && !useLocalClient) {
+    console.error(
+      'Error: CLIENT_URL is not set and --local-client flag is not provided.'
+    );
     process.exit(1);
   }
 
@@ -544,7 +547,9 @@ async function main() {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         console.log(
-          `Downloading client code from ${url}... (attempt ${attempt + 1}/${maxRetries + 1})`
+          `Downloading client code from ${url}... (attempt ${attempt + 1}/${
+            maxRetries + 1
+          })`
         );
 
         const compressedCode = await new Promise((resolve, reject) => {
@@ -575,7 +580,9 @@ async function main() {
 
         if (attempt === maxRetries) {
           throw new Error(
-            `Failed to download after ${maxRetries + 1} attempts: ${error.message}`
+            `Failed to download after ${maxRetries + 1} attempts: ${
+              error.message
+            }`
           );
         }
 
@@ -591,20 +598,33 @@ async function main() {
   }
 
   let clientCode;
-  try {
-    // Try to read the local copy first
-    clientCode = await fs.readFile(LOCAL_CLIENT_PATH, 'utf-8');
-    console.log('Using cached local client code.');
-  } catch (error) {
-    // If it doesn't exist, download it with retry logic
-    const compressedCode = await downloadWithRetry(CLIENT_URL, 3);
+  if (useLocalClient) {
+    try {
+      clientCode = await fs.readFile(LOCAL_CLIENT_PATH, 'utf-8');
+      console.log('Using local client code due to --local-client flag.');
+    } catch (error) {
+      console.error(
+        `Error: --local-client flag was used, but failed to read local client file at ${LOCAL_CLIENT_PATH}`
+      );
+      console.error(error);
+      process.exit(1);
+    }
+  } else {
+    try {
+      // Try to read the local copy first
+      clientCode = await fs.readFile(LOCAL_CLIENT_PATH, 'utf-8');
+      console.log('Using cached local client code.');
+    } catch (error) {
+      // If it doesn't exist, download it with retry logic
+      const compressedCode = await downloadWithRetry(CLIENT_URL, 3);
 
-    // Decompress the code
-    clientCode = zlib.gunzipSync(compressedCode).toString('utf-8');
+      // Decompress the code
+      clientCode = zlib.gunzipSync(compressedCode).toString('utf-8');
 
-    // Save the decompressed code for next time
-    await fs.writeFile(LOCAL_CLIENT_PATH, clientCode);
-    console.log(`Client code cached locally at ${LOCAL_CLIENT_PATH}`);
+      // Save the decompressed code for next time
+      await fs.writeFile(LOCAL_CLIENT_PATH, clientCode);
+      console.log(`Client code cached locally at ${LOCAL_CLIENT_PATH}`);
+    }
   }
 
   try {

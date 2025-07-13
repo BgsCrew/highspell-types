@@ -1,1 +1,1 @@
-pnpm -r lint --fix && pnpm -r format
+pnpm -r lint --fix && pnpm -r format && git add .

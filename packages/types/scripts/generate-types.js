@@ -607,12 +607,8 @@ async function main() {
       process.exit(1);
     }
   } else {
+    // First, try to download the latest version
     try {
-      // Try to read the local copy first
-      clientCode = await fs.readFile(LOCAL_CLIENT_PATH, 'utf-8');
-      console.log('Using cached local client code.');
-    } catch (error) {
-      // If it doesn't exist, download it with retry logic
       const compressedCode = await downloadWithRetry(CLIENT_URL, 3);
 
       // Decompress the code
@@ -620,7 +616,24 @@ async function main() {
 
       // Save the decompressed code for next time
       await fs.writeFile(LOCAL_CLIENT_PATH, clientCode);
-      console.log(`Client code cached locally at ${LOCAL_CLIENT_PATH}`);
+      console.log(
+        `Client code downloaded and cached locally at ${LOCAL_CLIENT_PATH}`
+      );
+    } catch (downloadError) {
+      console.warn('Failed to download client code:', downloadError.message);
+      console.log('Falling back to cached or included client.js file...');
+
+      try {
+        clientCode = await fs.readFile(LOCAL_CLIENT_PATH, 'utf-8');
+        console.log('Successfully using fallback client.js file.');
+      } catch (fallbackError) {
+        console.error(
+          'Error: Failed to download client code and no fallback file available.'
+        );
+        console.error('Download error:', downloadError.message);
+        console.error('Fallback error:', fallbackError.message);
+        process.exit(1);
+      }
     }
   }
 

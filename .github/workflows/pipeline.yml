@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [main]
   schedule:
-    - cron: '0 0 * * *' # Runs every day at midnight
+    - cron: '19 0 * * *'
   workflow_dispatch:
     inputs:
       version_type:
@@ -25,10 +25,14 @@ jobs:
     name: CI
     uses: ./.github/workflows/ci.yml
 
+  codeql:
+    name: CodeQL Analysis
+    uses: ./.github/workflows/codeql.yml
+
   cd:
     name: CD
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
-    needs: ci
+    needs: [ci, codeql]
     permissions:
       contents: write
       packages: write

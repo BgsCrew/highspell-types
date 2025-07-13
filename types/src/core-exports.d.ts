@@ -17,11 +17,7 @@ export namespace Core {
   export const EntityManager = Generated.Managers.EntityManager.Instance;
   export const SpellManager = Generated.Managers.SpellManager.Instance;
   export const WorldManager = Generated.Managers.WorldManager.Instance;
-  export const AtmosphereManager =
-    Generated.Managers.AtmosphereManager.Instance;
   export const NetworkManager = Generated.Managers.NetworkManager.Instance;
-  export const SkillManager = Generated.Managers.SkillManager.Instance;
-  export const TickManager = Generated.Managers.TickManager.Instance;
   export const SpellActionManager =
     Generated.Managers.SpellActionManager.Instance;
   export const PacketFactory = Generated.Managers.PacketFactory.Instance;

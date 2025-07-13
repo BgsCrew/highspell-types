@@ -61,7 +61,7 @@ jobs:
       - name: Install Dependencies
         run: pnpm install
       - name: Build Types
-        run: pnpm --filter @bgscrew/highspell-types build:ci
+        run: pnpm --filter @bgscrew/highspell-types build:ci:ci
         env:
           CLIENT_URL: ${{ secrets.CLIENT_URL }}
       - name: Build Plugin

@@ -8,6 +8,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "node scripts/generate-types.js --local-client",
+    "build:ci": "node scripts/generate-types.js",
     "test": "echo 'No tests defined' && exit 0",
     "lint": "eslint . --ext .ts,.js",
     "format": "prettier --write .",

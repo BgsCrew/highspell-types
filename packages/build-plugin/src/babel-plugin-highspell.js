@@ -7,41 +7,60 @@ module.exports = function ({ types: t }) {
     name: 'babel-plugin-highspell',
     visitor: {
       MemberExpression(path) {
-        // Check if we are accessing a property of the 'Core' object
-        // e.g., Core.GameLoop
-        if (!path.get('object').isIdentifier({ name: 'Core' })) {
-          return;
+        // Handle Core.ManagerName patterns
+        if (
+          path.node.object &&
+          path.node.object.type === 'Identifier' &&
+          path.node.object.name === 'Core' &&
+          path.node.property &&
+          path.node.property.type === 'Identifier'
+        ) {
+          const friendlyName = path.node.property.name;
+          const minifiedName = friendlyToMinified[friendlyName];
+
+          if (minifiedName) {
+            // Replace Core.GameLoop with Game.pW.Instance
+            const gameMinified = t.memberExpression(
+              t.identifier('Game'),
+              t.identifier(minifiedName)
+            );
+
+            const instanceAccess = t.memberExpression(
+              gameMinified,
+              t.identifier('Instance')
+            );
+
+            path.replaceWith(instanceAccess);
+          }
         }
 
-        const property = path.get('property');
-        const propertyName = property.node.name;
+        // Handle Generated.Managers.ManagerName patterns
+        if (
+          path.node.object &&
+          path.node.object.type === 'MemberExpression' &&
+          path.node.object.object &&
+          path.node.object.object.type === 'MemberExpression' &&
+          path.node.object.object.object &&
+          path.node.object.object.object.type === 'Identifier' &&
+          path.node.object.object.object.name === 'Generated' &&
+          path.node.object.object.property &&
+          path.node.object.object.property.type === 'Identifier' &&
+          path.node.object.object.property.name === 'Managers' &&
+          path.node.object.property &&
+          path.node.object.property.type === 'Identifier'
+        ) {
+          const friendlyName = path.node.object.property.name;
+          const minifiedName = friendlyToMinified[friendlyName];
 
-        // Look up the friendly name in our mapping
-        const minifiedName = friendlyToMinified[propertyName];
-
-        if (minifiedName) {
-          // If a mapping exists, replace the friendly name with the minified one.
-          // We also need to change the object from 'Core' to 'game.Managers'
-          // and the property to the minified manager's 'Instance'.
-          // So, Core.GameLoop becomes game.Managers.pW.Instance
-
-          const gameManagers = t.memberExpression(
-            t.identifier('game'),
-            t.identifier('Managers')
-          );
-
-          const minifiedManager = t.memberExpression(
-            gameManagers,
-            t.identifier(minifiedName)
-          );
-
-          const instanceProperty = t.memberExpression(
-            minifiedManager,
-            t.identifier('Instance')
-          );
-
-          // Replace the entire 'Core.GameLoop' expression
-          path.replaceWith(instanceProperty);
+          if (minifiedName) {
+            // Replace Generated.Managers.NetworkManager.Instance with Game.FG
+            path.replaceWith(
+              t.memberExpression(
+                t.identifier('Game'),
+                t.identifier(minifiedName)
+              )
+            );
+          }
         }
       },
 

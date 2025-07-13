@@ -1,0 +1,12 @@
+{
+  "name": "babel-example",
+  "private": true,
+  "scripts": {
+    "build": "babel input.js --out-file output.js --plugins ../src/babel-plugin-highspell.js",
+    "build:watch": "babel input.js --out-file output.js --plugins ../src/babel-plugin-highspell.js --watch"
+  },
+  "devDependencies": {
+    "@babel/cli": "^7.23.0",
+    "@babel/core": "^7.23.0"
+  }
+}

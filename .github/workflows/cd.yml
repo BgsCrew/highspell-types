@@ -164,10 +164,18 @@ jobs:
         if: steps.version.outputs.tag == 'latest'
         run: |
           NEW_VERSION=$(node -p "require('./packages/types/package.json').version")
-          gh release create "v$NEW_VERSION" \
-            --title "Release v$NEW_VERSION" \
-            --notes "Automated release v$NEW_VERSION" \
-            --latest
+          echo "Checking if release v$NEW_VERSION already exists..."
+          
+          # Check if release already exists
+          if gh release view "v$NEW_VERSION" >/dev/null 2>&1; then
+            echo "Release v$NEW_VERSION already exists, skipping release creation"
+          else
+            echo "Creating new release v$NEW_VERSION..."
+            gh release create "v$NEW_VERSION" \
+              --title "Release v$NEW_VERSION" \
+              --notes "Automated release v$NEW_VERSION" \
+              --latest
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -175,9 +183,17 @@ jobs:
         if: steps.version.outputs.tag == 'nightly'
         run: |
           NEW_VERSION=$(node -p "require('./packages/types/package.json').version")
-          gh release create "v$NEW_VERSION" \
-            --title "Nightly Release v$NEW_VERSION" \
-            --notes "Automated nightly build v$NEW_VERSION" \
-            --prerelease
+          echo "Checking if nightly release v$NEW_VERSION already exists..."
+          
+          # Check if release already exists
+          if gh release view "v$NEW_VERSION" >/dev/null 2>&1; then
+            echo "Release v$NEW_VERSION already exists, skipping release creation"
+          else
+            echo "Creating new nightly release v$NEW_VERSION..."
+            gh release create "v$NEW_VERSION" \
+              --title "Nightly Release v$NEW_VERSION" \
+              --notes "Automated nightly build v$NEW_VERSION" \
+              --prerelease
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

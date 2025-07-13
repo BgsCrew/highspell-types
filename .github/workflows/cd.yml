@@ -31,6 +31,7 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -41,7 +42,16 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: ${{ env.PNPM_VERSION }}
-          registry-url: 'https://npm.pkg.github.com'
+
+      - name: Configure npm registry
+        run: |
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.GITHUB_TOKEN }}" > ~/.npmrc
+          echo "@bgscrew:registry=https://npm.pkg.github.com" >> ~/.npmrc
+
+      - name: Configure Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
 
       - name: Install Dependencies
         run: pnpm install
@@ -58,14 +68,12 @@ jobs:
           CHANGES=$(git status --porcelain | wc -l)
           echo "has_changes=$CHANGES" >> $GITHUB_OUTPUT
 
-      - name: Configure Git
-        run: |
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-
       - name: Determine version bump
         id: version
         run: |
+          echo "Event name: ${{ github.event_name }}"
+          echo "Input version type: ${{ inputs.version-type }}"
+          
           if [[ "${{ inputs.version-type }}" != "auto" ]]; then
             echo "type=${{ inputs.version-type }}" >> $GITHUB_OUTPUT
             echo "tag=latest" >> $GITHUB_OUTPUT
@@ -77,6 +85,7 @@ jobs:
             echo "tag=latest" >> $GITHUB_OUTPUT
           else
             # Push to main - determine version based on commit messages
+            echo "Checking commit messages for version bump type..."
             if git log --format=%B -n 1 | grep -q "\[major\]"; then
               echo "type=major" >> $GITHUB_OUTPUT
             elif git log --format=%B -n 1 | grep -q "\[minor\]"; then
@@ -86,30 +95,59 @@ jobs:
             fi
             echo "tag=latest" >> $GITHUB_OUTPUT
           fi
+          
+          echo "Selected version type: $(cat $GITHUB_OUTPUT | grep '^type=' | cut -d'=' -f2)"
+          echo "Selected tag: $(cat $GITHUB_OUTPUT | grep '^tag=' | cut -d'=' -f2)"
 
       - name: Version all packages
         run: |
+          echo "Version type: ${{ steps.version.outputs.type }}"
           if [[ "${{ steps.version.outputs.type }}" == "prerelease" ]]; then
             # For nightly builds, use a prerelease version with timestamp
             TIMESTAMP=$(date +"%Y%m%d%H%M%S")
+            echo "Creating prerelease version with timestamp: $TIMESTAMP"
             pnpm -r version prerelease --preid=nightly-$TIMESTAMP --no-git-tag-version
           else
             # For regular releases
+            echo "Creating ${{ steps.version.outputs.type }} version"
             pnpm -r version ${{ steps.version.outputs.type }} --no-git-tag-version
           fi
+          
+          # Show the new versions
+          echo "New package versions:"
+          find packages -name "package.json" -exec grep -H '"version"' {} \;
 
-      - name: Commit generated files
+      - name: Commit generated files and version changes
         if: steps.git-check.outputs.has_changes > 0 || steps.version.outputs.tag == 'latest'
         run: |
+          echo "Checking git status before commit:"
+          git status
           git add .
           NEW_VERSION=$(node -p "require('./packages/types/package.json').version")
-          git commit -m "chore: release v$NEW_VERSION [skip ci]" || true
+          echo "New version: $NEW_VERSION"
+          
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            echo "Committing changes..."
+            git commit -m "chore: release v$NEW_VERSION [skip ci]"
+          fi
 
       - name: Create release tag
         if: steps.version.outputs.tag == 'latest'
         run: |
           NEW_VERSION=$(node -p "require('./packages/types/package.json').version")
-          git tag "v$NEW_VERSION"
+          echo "Creating and pushing tag: v$NEW_VERSION"
+          
+          # Check if tag already exists
+          if git tag -l "v$NEW_VERSION" | grep -q "v$NEW_VERSION"; then
+            echo "Tag v$NEW_VERSION already exists, skipping tag creation"
+          else
+            git tag "v$NEW_VERSION"
+            echo "Created tag v$NEW_VERSION"
+          fi
+          
+          # Push changes and tags
           git push origin main --tags
 
       - name: Publish all packages to GitHub Packages

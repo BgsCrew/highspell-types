@@ -106,11 +106,21 @@ jobs:
             # For nightly builds, use a prerelease version with timestamp
             TIMESTAMP=$(date +"%Y%m%d%H%M%S")
             echo "Creating prerelease version with timestamp: $TIMESTAMP"
-            pnpm -r version prerelease --preid=nightly-$TIMESTAMP --no-git-tag-version
+            for pkg in packages/*/; do
+              if [ -f "$pkg/package.json" ]; then
+                echo "Versioning package: $pkg"
+                cd "$pkg" && pnpm version prerelease --preid=nightly-$TIMESTAMP --no-git-tag-version && cd ../..
+              fi
+            done
           else
             # For regular releases
             echo "Creating ${{ steps.version.outputs.type }} version"
-            pnpm -r version ${{ steps.version.outputs.type }} --no-git-tag-version
+            for pkg in packages/*/; do
+              if [ -f "$pkg/package.json" ]; then
+                echo "Versioning package: $pkg"
+                cd "$pkg" && pnpm version ${{ steps.version.outputs.type }} --no-git-tag-version && cd ../..
+              fi
+            done
           fi
           
           # Show the new versions
